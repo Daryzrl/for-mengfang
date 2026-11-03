@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>今晚的星空，是给你的</title>
+<meta name="description" content="梦芳，抬头看一会儿。">
+<meta name="theme-color" content="#050010">
+<style>
+  :root{
+    --ink:#f6f2ff;
+    --dim:rgba(246,242,255,.62);
+    --line:rgba(246,242,255,.15);
+    --gold:#ecc99b;
+    --gold-soft:rgba(236,201,155,.62);
+    --violet:#ab8cff;
+    --serif:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","Source Han Serif CN",serif;
+    --sans:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{scroll-behavior:smooth;background:#050010}
+  body{
+    background:#050010;color:var(--ink);font-family:var(--serif);
+    overflow-x:hidden;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  }
+  canvas#sky{position:fixed;inset:0;z-index:0;display:block}
+
+  /* 氛围：极光 + 暗角 + 颗粒 */
+  .atmos{
+    position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:
+      radial-gradient(120% 85% at 50% -8%, rgba(126,96,225,.24) 0%, rgba(5,0,16,0) 58%),
+      radial-gradient(90% 62% at 88% 96%, rgba(48,104,178,.16) 0%, rgba(5,0,16,0) 62%),
+      radial-gradient(80% 70% at -6% 58%, rgba(196,96,158,.11) 0%, rgba(5,0,16,0) 60%),
+      radial-gradient(140% 118% at 50% 50%, rgba(5,0,16,0) 38%, rgba(3,0,10,.78) 100%);
+  }
+  .grain{
+    position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.055;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.65'/%3E%3C/svg%3E");
+  }
+
+  main{position:relative;z-index:3}
+  .reveal{opacity:0;transform:translateY(30px);transition:opacity 1.5s cubic-bezier(.16,.72,.2,1),transform 1.5s cubic-bezier(.16,.72,.2,1)}
+  .reveal.on{opacity:1;transform:none}
+
+  /* 顶部 */
+  .topmark{
+    position:fixed;top:0;left:0;right:0;z-index:4;pointer-events:none;
+    display:flex;justify-content:space-between;padding:24px 6vw;
+    font-family:var(--sans);font-size:10.5px;letter-spacing:.3em;color:rgba(246,242,255,.3);
+    opacity:0;transition:opacity 1.8s
+  }
+  .topmark.on{opacity:1}
+
+  /* ================= 首屏 ================= */
+  .hero{
+    min-height:100svh;display:flex;flex-direction:column;justify-content:center;
+    padding:16vh 8vw 18vh;position:relative;
+  }
+  .kicker{
+    font-family:var(--sans);font-size:12px;letter-spacing:.46em;
+    color:rgba(236,201,155,.7);margin-bottom:clamp(26px,4.5vh,44px);
+  }
+  /* 名字：逐字浮现 + 金色渐变（无 background-clip，避免与 transform 冲突） */
+  .name{
+    display:flex;align-items:baseline;gap:clamp(4px,1.6vw,16px);
+    font-size:clamp(56px,13vw,126px);line-height:1.08;font-weight:400;letter-spacing:.06em;
+    letter-spacing:.02em;
+  }
+  .name .ch{
+    display:inline-block;opacity:0;transform:translateY(30px) scale(.9);
+    animation:rise 1.7s cubic-bezier(.16,.72,.2,1) forwards;
+    background:linear-gradient(160deg,#ffffff 0%,#fdf1ff 26%,#dcc4ff 58%,#f0cf9f 100%);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:drop-shadow(0 0 44px rgba(171,140,255,.42)) drop-shadow(0 6px 30px rgba(0,0,0,.5));
+  }
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  .tagline{
+    margin-top:clamp(30px,5vh,52px);font-size:clamp(15px,3.6vw,19px);line-height:2.3;
+    color:rgba(246,242,255,.72);letter-spacing:.15em;max-width:24em;
+  }
+  .tagline span{display:block}
+  .hairline{
+    width:1px;height:clamp(60px,10vh,96px);margin-top:clamp(34px,6vh,54px);
+    background:linear-gradient(180deg,rgba(236,201,155,.75),rgba(236,201,155,0));
+  }
+  .scroll-hint{
+    position:absolute;bottom:5.5vh;left:8vw;
+    font-family:var(--sans);font-size:10.5px;letter-spacing:.34em;color:rgba(246,242,255,.34);
+    display:flex;align-items:center;gap:14px;
+  }
+  .scroll-hint i{display:block;width:34px;height:1px;background:rgba(246,242,255,.32);transform-origin:left;animation:drift 2.8s ease-in-out infinite}
+  @keyframes drift{0%,100%{transform:scaleX(.4);opacity:.35}50%{transform:scaleX(1);opacity:.95}}
+
+  /* ================= 诗句 ================= */
+  .verses{max-width:1080px;margin:0 auto;padding:0 8vw 6vh}
+  .verse{
+    padding:clamp(56px,9.5vh,104px) 0;border-top:1px solid var(--line);
+    display:grid;grid-template-columns:18% 1fr;gap:clamp(18px,3vw,44px);
+  }
+  .verse .label{
+    font-family:var(--sans);font-size:11px;letter-spacing:.3em;line-height:2.1;
+    color:rgba(236,201,155,.55);padding-top:.7em;
+  }
+  .verse .label b{display:block;font-weight:400;color:rgba(236,201,155,.9);font-size:12.5px}
+  .verse .body p{
+    font-size:clamp(20px,4.6vw,31px);line-height:1.95;letter-spacing:.07em;
+    color:rgba(246,242,255,.93);
+  }
+  .verse .body p + p{
+    margin-top:clamp(22px,3.6vh,34px);font-size:clamp(15.5px,3.6vw,20px);
+    line-height:2.15;color:rgba(246,242,255,.56);letter-spacing:.09em;
+  }
+  .verse em{
+    font-style:normal;color:var(--gold);
+    background:linear-gradient(180deg,transparent 64%,rgba(236,201,155,.16) 64%);
+    padding:0 .1em;
+  }
+  .verse .faint{color:rgba(246,242,255,.38)}
+
+  /* ================= 信封 ================= */
+  .letter-wrap{
+    min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:14vh 7vw;text-align:center;position:relative;
+  }
+  .letter-lead{font-size:clamp(16px,3.9vw,20px);color:rgba(246,242,255,.62);letter-spacing:.16em;margin-bottom:clamp(40px,7vh,64px)}
+  .envelope{
+    position:relative;cursor:pointer;width:min(76vw,372px);aspect-ratio:1.56/1;
+    border:0;background:none;font-family:inherit;perspective:1000px;
+    transition:opacity .9s ease,transform .9s cubic-bezier(.16,.72,.2,1);
+  }
+  .env-body{
+    position:absolute;inset:0;border:1px solid rgba(236,201,155,.46);
+    background:linear-gradient(158deg,rgba(38,22,66,.88),rgba(13,7,28,.96));
+    border-radius:2px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.03) inset,0 30px 80px -32px rgba(171,140,255,.6);
+    transition:transform .9s cubic-bezier(.16,.72,.2,1),box-shadow .9s;
+  }
+  .env-body::before{
+    content:'';position:absolute;inset:0;
+    background:
+      linear-gradient(to bottom right,transparent 49.65%,rgba(236,201,155,.4) 49.85%,rgba(236,201,155,.4) 50.15%,transparent 50.35%),
+      linear-gradient(to bottom left,transparent 49.65%,rgba(236,201,155,.4) 49.85%,rgba(236,201,155,.4) 50.15%,transparent 50.35%);
+    opacity:.5;transition:opacity .55s;
+  }
+  .seal{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:60px;height:60px;border-radius:50%;
+    background:radial-gradient(circle at 34% 28%,#f9e3bd,#d9a86f 56%,#9c6a38);
+    display:grid;place-items:center;font-size:21px;color:#3a1f31;
+    box-shadow:0 0 28px rgba(236,201,155,.6),0 0 0 3px rgba(5,0,16,.92),0 0 0 4px rgba(236,201,155,.34);
+    transition:opacity .45s,transform .75s cubic-bezier(.16,.72,.2,1);z-index:4;
+  }
+  .env-hint{
+    position:absolute;left:0;right:0;bottom:-46px;
+    font-family:var(--sans);font-size:11px;letter-spacing:.3em;color:rgba(246,242,255,.4);
+  }
+  .envelope:hover .env-body{transform:translateY(-8px);box-shadow:0 0 0 1px rgba(255,255,255,.05) inset,0 42px 96px -30px rgba(171,140,255,.8)}
+  .envelope.open .seal{opacity:0;transform:translate(-50%,-50%) scale(1.8) rotate(20deg)}
+  .envelope.open .env-body::before{opacity:0}
+  .envelope.open{opacity:0;transform:translateY(-24px) scale(.94);pointer-events:none}
+
+  /* 信纸：奶油色，与夜空形成对比，更像「真的信」 */
+  .letter{
+    position:relative;width:min(92vw,620px);text-align:left;
+    padding:clamp(32px,6.5vw,56px) clamp(26px,5.5vw,52px) clamp(28px,5vw,42px);
+    background:
+      radial-gradient(120% 90% at 10% 0%, #fdf9f0 0%, #f5eddc 55%, #eee3cd 100%);
+    border-radius:1px;
+    box-shadow:
+      0 50px 120px -44px rgba(0,0,0,.85),
+      0 0 80px -20px rgba(236,201,155,.28),
+      0 0 0 1px rgba(255,255,255,.5) inset;
+    display:none;color:#2b2438;
+  }
+  .letter::after{ /* 纸面细微纹理 */
+    content:'';position:absolute;inset:0;border-radius:1px;pointer-events:none;opacity:.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23p)' opacity='.09'/%3E%3C/svg%3E");
+  }
+  .letter.on{display:block;animation:unfold 1.3s cubic-bezier(.16,.72,.2,1) both}
+  @keyframes unfold{
+    from{opacity:0;transform:translateY(34px) rotateX(-12deg) scale(.97);transform-origin:top center}
+    to{opacity:1;transform:none}
+  }
+  .letter .to{
+    font-family:var(--sans);font-size:11px;letter-spacing:.34em;color:#a08052;margin-bottom:clamp(20px,3.4vh,28px);
+  }
+  .letter p{
+    font-size:clamp(15.5px,3.9vw,17.5px);line-height:2.32;letter-spacing:.045em;
+    color:#332b42;margin-bottom:18px;
+  }
+  .letter p:last-of-type{margin-bottom:0}
+  .letter .hl{color:#8a5a2b;background:linear-gradient(180deg,transparent 68%,rgba(192,150,92,.28) 68%)}
+  .fill{
+    color:#5b3f6e;border-bottom:1px dashed rgba(160,128,82,.7);padding:0 .2em;
+  }
+  .fill small{font-size:.82em;color:#8d7a5c;letter-spacing:0}
+  .sign{
+    margin-top:clamp(26px,4vh,36px);padding-top:20px;border-top:1px solid rgba(43,36,56,.14);
+    text-align:right;font-size:clamp(14px,3.4vw,16px);line-height:2.2;color:#4a4058;letter-spacing:.09em;
+  }
+
+  /* ================= 许愿 ================= */
+  .wish{
+    min-height:92svh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:16vh 8vw;
+  }
+  .wish h2{
+    font-size:clamp(21px,5.2vw,34px);line-height:1.95;letter-spacing:.14em;font-weight:400;
+    color:rgba(246,242,255,.93);
+  }
+  .wish p{font-size:clamp(13.5px,3.4vw,16px);color:rgba(246,242,255,.55);letter-spacing:.18em;margin-top:28px;line-height:2.2}
+  .wish .tip{
+    margin-top:clamp(46px,8vh,64px);font-family:var(--sans);font-size:10.5px;letter-spacing:.32em;
+    color:rgba(236,201,155,.42);
+  }
+
+  /* ================= 星座 ================= */
+  .const-wrap{padding:6vh 7vw 0;display:flex;flex-direction:column;align-items:center}
+  .constellation{width:min(94vw,820px);height:auto;overflow:visible}
+  .const-caption{
+    text-align:center;font-family:var(--sans);font-size:11px;letter-spacing:.34em;
+    color:rgba(246,242,255,.3);padding:clamp(26px,4vh,40px) 0 clamp(80px,12vh,120px);
+  }
+
+  /* 许愿光点 */
+  .spark{position:fixed;pointer-events:none;z-index:5;border-radius:50%;animation:sparkOut 2.8s cubic-bezier(.16,.72,.2,1) forwards}
+  @keyframes sparkOut{
+    0%{opacity:0;transform:scale(.2)}
+    10%{opacity:1;transform:scale(3.6)}
+    100%{opacity:0;transform:scale(1.2) translateY(-52px)}
+  }
+  .wish-msg{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.95);
+    z-index:6;pointer-events:none;opacity:0;
+    font-size:clamp(15px,4vw,20px);letter-spacing:.22em;color:var(--gold);
+    text-shadow:0 0 34px rgba(236,201,155,.65);
+    transition:opacity 1.1s,transform 1.3s cubic-bezier(.16,.72,.2,1);
+  }
+  .wish-msg.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+  footer{
+    position:relative;z-index:3;text-align:center;padding:0 7vw 8vh;
+    font-family:var(--sans);font-size:10.5px;letter-spacing:.3em;color:rgba(246,242,255,.22);
+  }
+
+  /* ================= 适配 ================= */
+  @media (max-width:640px){
+    .verse{grid-template-columns:1fr;gap:16px}
+    .verse .label{display:flex;gap:12px;align-items:baseline;padding-top:0}
+    .verse .label b{display:inline}
+    .hero{padding:14vh 8vw 16vh}
+    .letter{width:calc(100vw - 24px);padding-left:22px;padding-right:22px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .reveal{transition:none;opacity:1;transform:none}
+    .name .ch{animation:none;opacity:1;transform:none}
+    *{animation-duration:.01ms!important;animation-iteration-count:1!important}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="sky"></canvas>
+<div class="atmos"></div>
+<div class="grain"></div>
+
+<div class="topmark" id="topmark">
+  <span></span>
+  <span id="clock">—</span>
+</div>
+
+<main>
+  <section class="hero">
+    <div class="kicker">在此刻，星空为你亮着</div>
+    <h1 class="name" id="name" aria-label="邹梦芳"></h1>
+    <p class="tagline">
+      <span>今天也许不太好过。</span>
+      <span>所以先不看别的地方，抬头看一会儿。</span>
+    </p>
+    <div class="hairline"></div>
+    <div class="scroll-hint"><i></i><span>往下 慢慢看</span></div>
+  </section>
+
+  <section class="verses">
+    <article class="verse reveal">
+      <div class="label"><b>01</b>关于此刻</div>
+      <div class="body">
+        <p>你不必立刻好起来。<br>难过不用赶时间，它也可以慢一点。</p>
+        <p>我不会催你笑，也不会说“这没什么大不了”。<br>我只想在这里，陪你待一会儿。</p>
+      </div>
+    </article>
+
+    <article class="verse reveal">
+      <div class="label"><b>02</b>关于你</div>
+      <div class="body">
+        <p>你身上有一种东西，<br>是难过也拿不走的。</p>
+        <p>它不会因为今天糟糕就消失。<br>它只是暂时被云挡住了——<span class="faint">星星从来没有少过。</span></p>
+      </div>
+    </article>
+
+    <article class="verse reveal">
+      <div class="label"><b>03</b>关于夜晚</div>
+      <div class="body">
+        <p>所有的光，<br>都是<em>穿过黑暗</em>才到达我们的。</p>
+        <p>你现在觉得暗的地方，<br>不是光不再来，只是还在路上。</p>
+      </div>
+    </article>
+
+    <article class="verse reveal">
+      <div class="label"><b>04</b>关于我</div>
+      <div class="body">
+        <p>我不太会安慰人。<br>所以我把想说的话，写成了一片星空。</p>
+        <p>你可以一句话都不回。<br>只要让你知道：<span style="color:var(--gold)">有人注意到了你今天不太好。</span></p>
+      </div>
+    </article>
+  </section>
+
+  <section class="letter-wrap">
+    <p class="letter-lead reveal">这里还有一封信，是给你的</p>
+
+    <button class="envelope" id="envelope" aria-label="打开信封，读信">
+      <span class="env-body"></span>
+      <span class="seal">芳</span>
+      <span class="env-hint">轻触拆开</span>
+    </button>
+
+    <div class="letter" id="letter">
+      <div class="to">给&nbsp;邹梦芳</div>
+      <p>梦芳：</p>
+      <p>不知道你今天是因为什么不开心。<span class="hl">可能是很多小事叠在一起，也可能只是一件。</span>哪一种，都不需要跟我解释。</p>
+      <p>我想说的是——你不需要在我这儿表现得没事。你可以不好，这不是什么需要道歉的事。</p>
+      <p>如果你愿意说，我就听着，不打断，也不评价。如果你不想说，那我们就聊点别的，或者干脆一句话都不说，我陪你安静一会儿。</p>
+      <p>难过的时候，人很容易觉得自己什么都做不好。<span class="hl">那是错觉，是情绪在说谎。</span>我看到的你，和低谷里的你说的，不是同一个人。</p>
+      <p>撑不住就先歇着。这个世界不会因为你停一天，就把你落下。</p>
+      <p>我在。<br>真的在。</p>
+      <div class="sign">
+        <span class="fill">Dary (duola)</span><br>
+        <span style="font-size:.88em;color:#7d7060">写于 <span class="fill">2026/11/3</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="wish">
+    <h2>夜里可以许一个愿，<br>即使你已经不太相信了。</h2>
+    <p>点一下天空，把想丢掉的那句话，交给星星。</p>
+    <div class="tip">轻触任意处 · 会留下一点光</div>
+  </section>
+
+  <div class="const-wrap">
+    <!-- 尾页：一句落款 + 三颗守护星 -->
+    <svg class="constellation" id="constellation" viewBox="0 0 760 190" fill="none" aria-label="三颗星连成的图案"></svg>
+    <p class="const-caption">这三颗星，今晚替你值班</p>
+  </div>
+</main>
+
+<footer>F A I N T &nbsp; L I G H T &nbsp; · &nbsp; S T I L L &nbsp; S H I N I N G</footer>
+<div class="wish-msg" id="wishMsg"></div>
+
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ============================================================
+     星空
+     ============================================================ */
+  const cvs = document.getElementById('sky');
+  const ctx = cvs.getContext('2d', {alpha: true});
+  let W = 0, H = 0;
+  const DPR = Math.min(devicePixelRatio || 1, 2);
+  let stars = [], nebulas = [], meteors = [], t = 0;
+
+  const PALETTE = [
+    {c: '255,255,255', w: 5},
+    {c: '235,225,255', w: 3},
+    {c: '206,216,255', w: 2},
+    {c: '255,235,208', w: 2},
+    {c: '248,216,232', w: 1}
+  ];
+  const palettePool = PALETTE.flatMap(p => Array(p.w).fill(p.c));
+
+  function resize(){
+    W = innerWidth; H = innerHeight;
+    cvs.width = Math.round(W * DPR); cvs.height = Math.round(H * DPR);
+    cvs.style.width = W + 'px'; cvs.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    build();
+  }
+
+  function build(){
+    const count = Math.round(Math.min(620, Math.max(240, (W * H) / 2900)));
+    stars = Array.from({length: count}, (_, i) => {
+      const big = Math.random() > 0.93;
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: big ? 1.35 + Math.random() * 1.1 : 0.45 + Math.random() * 0.85,
+        base: big ? 0.72 + Math.random() * 0.28 : 0.28 + Math.random() * 0.55,
+        tw: 0.5 + Math.random() * 2.0,
+        ph: Math.random() * Math.PI * 2,
+        c: palettePool[(Math.random() * palettePool.length) | 0],
+        big,
+        vy: (Math.random() - 0.5) * 0.008
+      };
+    });
+    nebulas = [
+      {x: W * 0.20, y: H * 0.16, r: Math.max(W, H) * 0.46, c: '124,88,222', a: 0.19},
+      {x: W * 0.84, y: H * 0.32, r: Math.max(W, H) * 0.38, c: '66,108,196', a: 0.15},
+      {x: W * 0.52, y: H * 0.86, r: Math.max(W, H) * 0.50, c: '186,88,152', a: 0.12},
+      {x: W * 0.30, y: H * 0.62, r: Math.max(W, H) * 0.30, c: '96,196,200', a: 0.07}
+    ];
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+
+    for (const n of nebulas){
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
+      g.addColorStop(0,   `rgba(${n.c},${n.a})`);
+      g.addColorStop(0.42,`rgba(${n.c},${n.a * 0.42})`);
+      g.addColorStop(1,   `rgba(${n.c},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    for (const s of stars){
+      const flick = reduce ? 1 : (0.7 + 0.3 * Math.sin(t * s.tw + s.ph));
+      const a = s.base * flick;
+      if (a <= 0.02) continue;
+
+      // 大星先铺一圈柔光
+      if (s.big){
+        const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 7);
+        g.addColorStop(0, `rgba(${s.c},${a * 0.5})`);
+        g.addColorStop(0.4, `rgba(${s.c},${a * 0.12})`);
+        g.addColorStop(1, `rgba(${s.c},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 7, 0, 6.2832); ctx.fill();
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = `rgba(${s.c},${a})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
+
+      // 十字星芒（更明显的「亮」）
+      if (s.big && !reduce){
+        ctx.strokeStyle = `rgba(${s.c},${a * 0.5})`;
+        ctx.lineWidth = 0.75; ctx.lineCap = 'round';
+        const L = s.r * 6.5;
+        ctx.beginPath();
+        ctx.moveTo(s.x - L, s.y); ctx.lineTo(s.x + L, s.y);
+        ctx.moveTo(s.x, s.y - L * 0.8); ctx.lineTo(s.x, s.y + L * 0.8);
+        ctx.stroke();
+      }
+
+      if (!reduce){ s.y += s.vy; if (s.y < -4) s.y = H + 4; if (s.y > H + 4) s.y = -4; }
+    }
+    ctx.globalAlpha = 1;
+
+    // 流星
+    for (let i = meteors.length - 1; i >= 0; i--){
+      const m = meteors[i];
+      m.x += m.vx; m.y += m.vy; m.life--;
+      const k = Math.max(0, m.life / m.max);
+      const tailX = m.x - m.vx * 15, tailY = m.y - m.vy * 15;
+      const g = ctx.createLinearGradient(m.x, m.y, tailX, tailY);
+      g.addColorStop(0, `rgba(255,252,246,${0.92 * k})`);
+      g.addColorStop(0.5, `rgba(236,201,155,${0.42 * k})`);
+      g.addColorStop(1, 'rgba(236,201,155,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = 1.7; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(tailX, tailY); ctx.stroke();
+      if (m.life <= 0) meteors.splice(i, 1);
+    }
+
+    t += 0.016;
+    requestAnimationFrame(draw);
+  }
+
+  function spawnMeteor(){
+    if (reduce) return;
+    const fromLeft = Math.random() > 0.5;
+    meteors.push({
+      x: fromLeft ? Math.random() * W * 0.45 : W * 0.55 + Math.random() * W * 0.45,
+      y: Math.random() * H * 0.32,
+      vx: (fromLeft ? 1 : -1) * (5.4 + Math.random() * 3.2),
+      vy: 1.9 + Math.random() * 1.5,
+      life: 66, max: 66
+    });
+  }
+  setInterval(() => { if (Math.random() < 0.7) spawnMeteor(); }, 3800);
+
+  resize();
+  addEventListener('resize', resize);
+  requestAnimationFrame(draw);
+
+  /* ============================================================
+     名字逐字浮现
+     ============================================================ */
+  const nameEl = document.getElementById('name');
+  [...'邹梦芳'].forEach((ch, i) => {
+    const s = document.createElement('span');
+    s.className = 'ch';
+    // &nbsp; 分隔：bash 段依旧保持字形
+    s.innerHTML = ch === ' ' ? '&nbsp;' : ch;
+    s.style.animationDelay = (0.3 + i * 0.28) + 's';
+    nameEl.appendChild(s);
+  });
+  // 1.4s 后补一层常驻呼吸光，避免动画结束后发灰
+  setTimeout(() => {
+    nameEl.querySelectorAll('.ch').forEach((s, i) => {
+      s.animate && s.animate(
+        [{filter: 'drop-shadow(0 0 40px rgba(171,140,255,.40))'},
+         {filter: 'drop-shadow(0 0 62px rgba(236,201,155,.55))'},
+         {filter: 'drop-shadow(0 0 40px rgba(171,140,255,.40))'}],
+        {duration: 6200 + i * 900, iterations: Infinity, easing: 'ease-in-out'}
+      );
+    });
+  }, 2200);
+
+  /* ============================================================
+     滚动淡入
+     ============================================================ */
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('on'); io.unobserve(e.target); } });
+  }, {threshold: 0.16, rootMargin: '0px 0px -6% 0px'});
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  setTimeout(() => document.getElementById('topmark').classList.add('on'), 700);
+
+  /* 时钟 */
+  const clock = document.getElementById('clock');
+  const tick = () => {
+    const d = new Date();
+    clock.textContent = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  };
+  tick(); setInterval(tick, 20000);
+
+  /* ============================================================
+     信封
+     ============================================================ */
+  const env = document.getElementById('envelope');
+  const letter = document.getElementById('letter');
+  env.addEventListener('click', () => {
+    if (env.classList.contains('open')) return;
+    env.classList.add('open');
+    spawnMeteor(); setTimeout(spawnMeteor, 260);
+    setTimeout(() => {
+      letter.classList.add('on');
+      setTimeout(() => letter.scrollIntoView({behavior: 'smooth', block: 'center'}), 120);
+    }, 820);
+  });
+
+  /* ============================================================
+     许愿
+     ============================================================ */
+  const MSGS = ['这颗星，替你记下了','不用说出来，星星听见了','已经替你放上天了','愿望很轻，但有人接住了'];
+  const msgEl = document.getElementById('wishMsg');
+  let msgTimer = null;
+
+  function sparkAt(x, y){
+    const size = 7 + Math.random() * 12;
+    const el = document.createElement('div');
+    el.className = 'spark';
+    el.style.left = (x - size / 2) + 'px';
+    el.style.top = (y - size / 2) + 'px';
+    el.style.width = el.style.height = size + 'px';
+    el.style.background = 'radial-gradient(circle, #fff 0%, #ffeecd 40%, rgba(236,201,155,0) 72%)';
+    el.style.boxShadow = '0 0 24px rgba(255,238,205,.9)';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2900);
+  }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('#envelope') || e.target.closest('a') || e.target.closest('.letter')) return;
+    sparkAt(e.clientX, e.clientY);
+    if (Math.random() < 0.5) spawnMeteor();
+    if (msgTimer) return;
+    msgEl.textContent = MSGS[(Math.random() * MSGS.length) | 0];
+    msgEl.classList.add('on');
+    msgTimer = setTimeout(() => { msgEl.classList.remove('on'); msgTimer = null; }, 2400);
+  });
+
+  /* ============================================================
+     星座：由真实笔画路径生成「我在」
+     每个字由若干条折线（stroke）组成 → 采样成星点 → 沿折线依次点亮
+     ============================================================ */
+  /* 尾页：三颗守护星 + 柔光连线 */
+  const svg = document.getElementById('constellation');
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const PTS = [
+    {x: 258, y: 96, r: 3.0, big: true},
+    {x: 380, y: 58, r: 4.4, big: true},
+    {x: 502, y: 108, r: 2.6, big: false},
+    {x: 316, y: 150, r: 2.0, big: false},
+    {x: 448, y: 148, r: 2.0, big: false}
+  ];
+  const LINKS = [[0,1],[1,2],[0,3],[2,4],[3,4]];
+
+  const gL = document.createElementNS(NS, 'g');
+  gL.setAttribute('stroke', 'rgba(236,201,155,.42)');
+  gL.setAttribute('stroke-width', '1');
+  const gD = document.createElementNS(NS, 'g');
+  svg.appendChild(gL); svg.appendChild(gD);
+
+  LINKS.forEach(([a,b], i) => {
+    const p = PTS[a], q = PTS[b];
+    const ln = document.createElementNS(NS, 'line');
+    ln.setAttribute('x1', p.x); ln.setAttribute('y1', p.y);
+    ln.setAttribute('x2', q.x); ln.setAttribute('y2', q.y);
+    ln.style.opacity = '0';
+    ln.style.transition = 'opacity 1.2s ease ' + (300 + i * 160) + 'ms';
+    gL.appendChild(ln);
+  });
+
+  PTS.forEach((p, i) => {
+    const halo = document.createElementNS(NS, 'circle');
+    halo.setAttribute('cx', p.x); halo.setAttribute('cy', p.y);
+    halo.setAttribute('r', p.big ? 26 : 14);
+    halo.setAttribute('fill', 'rgba(255,236,205,.07)');
+    halo.style.opacity = '0';
+    halo.style.transition = 'opacity 1.6s ease ' + (i * 200) + 'ms';
+    gD.appendChild(halo);
+
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y); dot.setAttribute('r', p.r);
+    dot.setAttribute('fill', '#fffaf2');
+    dot.style.opacity = '0';
+    dot.style.transition = 'opacity 1.4s ease ' + (i * 200) + 'ms';
+    dot.style.filter = 'drop-shadow(0 0 7px rgba(255,244,224,.9))';
+    gD.appendChild(dot);
+
+    if (p.big){
+      const L = 13;
+      const cr = document.createElementNS(NS, 'path');
+      cr.setAttribute('d', 'M'+(p.x-L)+','+p.y+'H'+(p.x+L)+'M'+p.x+','+(p.y-L)+'V'+(p.y+L));
+      cr.setAttribute('stroke', 'rgba(255,244,224,.62)');
+      cr.setAttribute('stroke-width', '.9');
+      cr.setAttribute('stroke-linecap', 'round');
+      cr.style.opacity = '0';
+      cr.style.transition = 'opacity 1.8s ease ' + (i * 200 + 200) + 'ms';
+      gD.appendChild(cr);
+    }
+  });
+
+  const constIO = new IntersectionObserver(es => {
+    es.forEach(e => {
+      if (!e.isIntersecting) return;
+      gL.querySelectorAll('line').forEach(l => l.style.opacity = '1');
+      gD.querySelectorAll('circle').forEach(c => c.style.opacity = '1');
+      gD.querySelectorAll('path').forEach(p => p.style.opacity = '1');
+      constIO.disconnect();
+    });
+  }, {threshold: 0.4});
+  constIO.observe(svg);
+
+  setTimeout(spawnMeteor, 24000);
+})();
+</script>
+</body>
+</html>
